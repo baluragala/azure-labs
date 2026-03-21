@@ -1,0 +1,683 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Lab: VNet, NSGs, Linux app VMs, Windows DB VM, data disks, Private DNS, nginx via CustomScriptExtension."
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources in this deployment."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Logical name of the resource group (for documentation; create the RG before deploy). Does not create the RG."
+      }
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the virtual network."
+      }
+    },
+    "vnetAddressPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Address space for the VNet (CIDR)."
+      }
+    },
+    "subnetAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the application tier subnet."
+      }
+    },
+    "subnetAppPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "CIDR for the application subnet (used by NSG db rule as SQL source)."
+      }
+    },
+    "subnetDbName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the database tier subnet."
+      }
+    },
+    "subnetDbPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "CIDR for the database subnet."
+      }
+    },
+    "nsgAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the NSG attached to the app subnet."
+      }
+    },
+    "nsgDbName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the NSG attached to the db subnet."
+      }
+    },
+    "vmAppNames": {
+      "type": "array",
+      "minLength": 2,
+      "maxLength": 2,
+      "metadata": {
+        "description": "Names of the two Ubuntu application VMs (order: app01, app02)."
+      }
+    },
+    "vmDbName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Windows Server database VM."
+      }
+    },
+    "vmAppSize": {
+      "type": "string",
+      "metadata": {
+        "description": "VM size for Linux app tier."
+      }
+    },
+    "vmDbSize": {
+      "type": "string",
+      "metadata": {
+        "description": "VM size for Windows DB tier."
+      }
+    },
+    "appDataDiskSizeGb": {
+      "type": "int",
+      "minValue": 32,
+      "metadata": {
+        "description": "Size in GB for each app-tier Premium data disk."
+      }
+    },
+    "dbDataDiskSizeGb": {
+      "type": "int",
+      "minValue": 32,
+      "metadata": {
+        "description": "Size in GB for the DB-tier Premium data disk."
+      }
+    },
+    "linuxAdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Linux administrator username (SSH)."
+      }
+    },
+    "windowsAdminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Windows administrator username."
+      }
+    },
+    "windowsAdminPassword": {
+      "type": "secureString",
+      "metadata": {
+        "description": "TEACHING NOTE: secureString is not returned in deployment history or logged in plain text. Using string would expose the password in clear text in logs and exported templates."
+      }
+    },
+    "sshPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key for Linux VMs (OpenSSH format)."
+      }
+    },
+    "privateDnsZoneName": {
+      "type": "string",
+      "metadata": {
+        "description": "Private DNS zone name (e.g. internal.contoso.local)."
+      }
+    },
+    "vmApp01PrivateIp": {
+      "type": "string",
+      "metadata": {
+        "description": "Static private IP for the first app VM NIC (must fall within app subnet)."
+      }
+    },
+    "vmApp02PrivateIp": {
+      "type": "string",
+      "metadata": {
+        "description": "Static private IP for the second app VM NIC."
+      }
+    },
+    "vmDbPrivateIp": {
+      "type": "string",
+      "metadata": {
+        "description": "Static private IP for the database VM NIC (must fall within db subnet)."
+      }
+    }
+  },
+  "variables": {
+    "linuxImagePublisher": "Canonical",
+    "linuxImageOffer": "0001-com-ubuntu-server-jammy",
+    "linuxImageSku": "22_04-lts-gen2",
+    "windowsImagePublisher": "MicrosoftWindowsServer",
+    "windowsImageOffer": "WindowsServer",
+    "windowsImageSku": "2022-Datacenter",
+    "diskApiVersion": "2023-04-02",
+    "netApiVersion": "2023-09-01",
+    "computeApiVersion": "2023-03-01",
+    "dnsApiVersion": "2020-06-01",
+    "appPrivateIps": [
+      "[parameters('vmApp01PrivateIp')]",
+      "[parameters('vmApp02PrivateIp')]"
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "[variables('netApiVersion')]",
+      "name": "[parameters('nsgAppName')]",
+      "location": "[parameters('location')]",
+      "metadata": {
+        "description": "TEACHING NOTE: NSG is associated to the subnet so all NICs in that subnet inherit the same rules (central policy)."
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowHTTPInternet",
+            "properties": {
+              "priority": 100,
+              "access": "Allow",
+              "direction": "Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "AllowHTTPSInternet",
+            "properties": {
+              "priority": 110,
+              "access": "Allow",
+              "direction": "Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "AllowSSHInternet",
+            "properties": {
+              "priority": 120,
+              "access": "Allow",
+              "direction": "Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "DenyAllInbound",
+            "properties": {
+              "priority": 4096,
+              "access": "Deny",
+              "direction": "Inbound",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "[variables('netApiVersion')]",
+      "name": "[parameters('nsgDbName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowSQLFromAppSubnet",
+            "properties": {
+              "priority": 100,
+              "access": "Allow",
+              "direction": "Inbound",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "1433",
+              "sourceAddressPrefix": "[parameters('subnetAppPrefix')]",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "DenyAllInbound",
+            "properties": {
+              "priority": 4096,
+              "access": "Deny",
+              "direction": "Inbound",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "[variables('netApiVersion')]",
+      "name": "[parameters('vnetName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgAppName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgDbName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["[parameters('vnetAddressPrefix')]"]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('subnetAppName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetAppPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgAppName'))]"
+              }
+            }
+          },
+          {
+            "name": "[parameters('subnetDbName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetDbPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgDbName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "[variables('netApiVersion')]",
+      "name": "[concat(parameters('vmAppNames')[copyIndex()], '-pip')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard",
+        "tier": "Regional"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      },
+      "copy": {
+        "name": "appPublicIpCopy",
+        "count": "[length(parameters('vmAppNames'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "[variables('netApiVersion')]",
+      "name": "[concat(parameters('vmAppNames')[copyIndex()], '-nic')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+        "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('vmAppNames')[copyIndex()], '-pip'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[variables('appPrivateIps')[copyIndex()]]",
+              "privateIPAllocationMethod": "Static",
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetAppName'))]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('vmAppNames')[copyIndex()], '-pip'))]"
+              }
+            }
+          }
+        ]
+      },
+      "copy": {
+        "name": "appNicCopy",
+        "count": "[length(parameters('vmAppNames'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "[variables('netApiVersion')]",
+      "name": "[concat(parameters('vmDbName'), '-nic')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+      ],
+      "metadata": {
+        "description": "TEACHING NOTE: dependsOn VNet ensures subnet exists before NIC; ARM may deploy resources in parallel without explicit dependsOn ordering."
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAddress": "[parameters('vmDbPrivateIp')]",
+              "privateIPAllocationMethod": "Static",
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetDbName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/disks",
+      "apiVersion": "[variables('diskApiVersion')]",
+      "name": "[concat(parameters('vmAppNames')[copyIndex()], '-data')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Premium_LRS"
+      },
+      "properties": {
+        "diskSizeGB": "[parameters('appDataDiskSizeGb')]",
+        "creationData": {
+          "createOption": "Empty"
+        }
+      },
+      "copy": {
+        "name": "appDiskCopy",
+        "count": "[length(parameters('vmAppNames'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Compute/disks",
+      "apiVersion": "[variables('diskApiVersion')]",
+      "name": "[concat(parameters('vmDbName'), '-data')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Premium_LRS"
+      },
+      "properties": {
+        "diskSizeGB": "[parameters('dbDataDiskSizeGb')]",
+        "creationData": {
+          "createOption": "Empty"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "[variables('computeApiVersion')]",
+      "name": "[parameters('vmAppNames')[copyIndex()]]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[copyIndex()], '-nic'))]",
+        "[resourceId('Microsoft.Compute/disks', concat(parameters('vmAppNames')[copyIndex()], '-data'))]"
+      ],
+      "metadata": {
+        "description": "TEACHING NOTE: dependsOn NIC and disk so interfaces and managed disks exist before the VM is created and data disk attach succeeds."
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmAppSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmAppNames')[copyIndex()]]",
+          "adminUsername": "[parameters('linuxAdminUsername')]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[concat('/home/', parameters('linuxAdminUsername'), '/.ssh/authorized_keys')]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            }
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('linuxImagePublisher')]",
+            "offer": "[variables('linuxImageOffer')]",
+            "sku": "[variables('linuxImageSku')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('vmAppNames')[copyIndex()], '-os')]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          },
+          "dataDisks": [
+            {
+              "lun": 0,
+              "createOption": "Attach",
+              "managedDisk": {
+                "id": "[resourceId('Microsoft.Compute/disks', concat(parameters('vmAppNames')[copyIndex()], '-data'))]"
+              }
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[copyIndex()], '-nic'))]",
+              "properties": {
+                "primary": true
+              }
+            }
+          ]
+        }
+      },
+      "copy": {
+        "name": "appVmCopy",
+        "count": "[length(parameters('vmAppNames'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "[variables('computeApiVersion')]",
+      "name": "[parameters('vmDbName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmDbName'), '-nic'))]",
+        "[resourceId('Microsoft.Compute/disks', concat(parameters('vmDbName'), '-data'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmDbSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmDbName')]",
+          "adminUsername": "[parameters('windowsAdminUsername')]",
+          "adminPassword": "[parameters('windowsAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('windowsImagePublisher')]",
+            "offer": "[variables('windowsImageOffer')]",
+            "sku": "[variables('windowsImageSku')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('vmDbName'), '-os')]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          },
+          "dataDisks": [
+            {
+              "lun": 0,
+              "createOption": "Attach",
+              "managedDisk": {
+                "id": "[resourceId('Microsoft.Compute/disks', concat(parameters('vmDbName'), '-data'))]"
+              }
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmDbName'), '-nic'))]",
+              "properties": {
+                "primary": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "[variables('computeApiVersion')]",
+      "name": "[concat(parameters('vmAppNames')[copyIndex()], '/CustomScript')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmAppNames')[copyIndex()])]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.1",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "commandToExecute": "sudo apt-get update && sudo apt-get install -y nginx"
+        }
+      },
+      "copy": {
+        "name": "appExtensionCopy",
+        "count": "[length(parameters('vmAppNames'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "[variables('dnsApiVersion')]",
+      "name": "[parameters('privateDnsZoneName')]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "[variables('dnsApiVersion')]",
+      "name": "[concat(parameters('privateDnsZoneName'), '/', uniqueString(parameters('vnetName'), 'vnetlink'))]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+      ],
+      "properties": {
+        "registrationEnabled": true,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "[variables('dnsApiVersion')]",
+      "name": "[concat(parameters('privateDnsZoneName'), '/app01')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[0], '-nic'))]"
+      ],
+      "properties": {
+        "ttl": 3600,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[0], '-nic')), variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "[variables('dnsApiVersion')]",
+      "name": "[concat(parameters('privateDnsZoneName'), '/app02')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[1], '-nic'))]"
+      ],
+      "properties": {
+        "ttl": 3600,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[1], '-nic')), variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/A",
+      "apiVersion": "[variables('dnsApiVersion')]",
+      "name": "[concat(parameters('privateDnsZoneName'), '/db01')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmDbName'), '-nic'))]"
+      ],
+      "properties": {
+        "ttl": 3600,
+        "aRecords": [
+          {
+            "ipv4Address": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmDbName'), '-nic')), variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "vnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the virtual network."
+      },
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+    },
+    "appSubnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the app subnet."
+      },
+      "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetAppName'))]"
+    },
+    "dbSubnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the db subnet."
+      },
+      "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetDbName'))]"
+    },
+    "vmApp01PrivateIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[0], '-nic')), variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
+    },
+    "vmApp02PrivateIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmAppNames')[1], '-nic')), variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
+    },
+    "vmDbPrivateIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmDbName'), '-nic')), variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
+    },
+    "privateDnsZoneId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/privateDnsZones', parameters('privateDnsZoneName'))]"
+    }
+  }
+}

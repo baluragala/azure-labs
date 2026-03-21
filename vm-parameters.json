@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmName": {
+      "value": "hello-arm-vm"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "vmSize": {
+      "value": "Standard_DS1_v2"
+    },
+    "adminUsername": {
+      "value": "azureadmin"
+    },
+    "adminPassword": {
+      "value": "P@ssw0rd1234!"
+    },
+    "osDiskStorageAccountType": {
+      "value": "Standard_LRS"
+    },
+    "windowsOSVersion": {
+      "value": "2025-Datacenter"
+    },
+    "virtualNetworkName": {
+      "value": "hello-arm-vnet"
+    },
+    "subnetName": {
+      "value": "hello-arm-subnet"
+    },
+    "networkSecurityGroupName": {
+      "value": "hello-arm-nsg"
+    },
+    "publicIpAddressName": {
+      "value": "hello-arm-publicip"
+    },
+    "networkInterfaceName": {
+      "value": "hello-arm-nic"
+    }
+  }
+}

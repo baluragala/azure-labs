@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus2"
+    },
+    "resourceGroupName": {
+      "value": "prod-rg"
+    },
+    "vnetName": {
+      "value": "vnet-prod"
+    },
+    "vnetAddressPrefix": {
+      "value": "10.0.0.0/16"
+    },
+    "subnetAppName": {
+      "value": "snet-app"
+    },
+    "subnetAppPrefix": {
+      "value": "10.0.1.0/24"
+    },
+    "subnetDbName": {
+      "value": "snet-db"
+    },
+    "subnetDbPrefix": {
+      "value": "10.0.2.0/24"
+    },
+    "nsgAppName": {
+      "value": "nsg-app"
+    },
+    "nsgDbName": {
+      "value": "nsg-db"
+    },
+    "vmAppNames": {
+      "value": ["vm-app-01", "vm-app-02"]
+    },
+    "vmDbName": {
+      "value": "vm-db-01"
+    },
+    "vmAppSize": {
+      "value": "Standard_B2s"
+    },
+    "vmDbSize": {
+      "value": "Standard_B2ms"
+    },
+    "appDataDiskSizeGb": {
+      "value": 128
+    },
+    "dbDataDiskSizeGb": {
+      "value": 256
+    },
+    "linuxAdminUsername": {
+      "value": "azureuser"
+    },
+    "windowsAdminUsername": {
+      "value": "azureuser"
+    },
+    "sshPublicKey": {
+      "value": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCplaceholderReplaceBeforeDeploy"
+    },
+    "privateDnsZoneName": {
+      "value": "internal.contoso.local"
+    },
+    "vmApp01PrivateIp": {
+      "value": "10.0.1.4"
+    },
+    "vmApp02PrivateIp": {
+      "value": "10.0.1.5"
+    },
+    "vmDbPrivateIp": {
+      "value": "10.0.2.4"
+    }
+  }
+}
