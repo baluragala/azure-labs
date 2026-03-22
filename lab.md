@@ -63,8 +63,8 @@ DB tier (x1):
 - VM extensions: add `CustomScriptExtension` on Linux VMs that runs:
   `sudo apt-get update && sudo apt-get install -y nginx`
   (This lets students validate the VM is running after deploy)
-- Use `outputs` section to export: VNet ID, Subnet IDs (including private-endpoint subnet), all VM private IPs, internal DNS zone ID, Blob Private Link fields (storage account name, blob HTTPS URI, private endpoint IP, `privatelink.blob…` zone ID)
-- Split parameters file into `dev` (smaller SKUs: Standard_B1s, 64 GB disks) and `prod` (full spec above)
+- Use `outputs` section to export: VNet ID, Subnet IDs (including private-endpoint subnet), all VM private IPs, internal DNS zone ID, Blob Private Link fields (storage account name, blob HTTPS URI, `privatelink.blob…` zone ID, and private endpoint IP **or** PE NIC resource ID—see ARM vs Bicep limitations on nested `reference()`)
+- Split parameters file into `dev` (smaller SKUs: e.g. Standard_B1ms app + Standard_B2ms Windows DB, 64 GB disks—must match subscription policy allow-lists) and `prod` (full spec above)
 
 ---
 

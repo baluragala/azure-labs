@@ -16,8 +16,8 @@ Use this list after a successful deployment. Tick each item when verified.
 - [ ] From `vm-app-01`, `nslookup db01.internal.contoso.local` returns the private IP of `vm-db-01`.
 - [ ] `curl -s -o /dev/null -w "%{http_code}" http://localhost` on each app VM returns `200` (nginx default page).
 - [ ] From your laptop, port `1433` to the **public** IP of `vm-app-01` is **not** an open SQL path to the DB subnet (NSG should block Internet → db); optional: confirm effective NSG on `snet-db` blocks Internet-originated SQL.
-- [ ] Cost estimate for the resource group is under **$15/day** when using **dev** SKUs (`Standard_B1s`, 64 GB disks); prod will be higher—confirm budget if needed.
+- [ ] Cost estimate for the resource group is reasonable for **dev** SKUs (`Standard_B1ms` app, `Standard_B2ms` DB, 64 GB disks—tune if your subscription policy requires other sizes); prod will be higher.
 - [ ] Subnet **`snet-pe`** (`10.0.3.0/24` or your parameterized CIDR) exists for private endpoints.
 - [ ] Storage account shows **Public network access** disabled and a **private endpoint** for sub-resource **blob** in **Approved** state.
 - [ ] Private DNS zone **`privatelink.blob.core.windows.net`** (public Azure) exists and is **linked** to `vnet-prod`.
-- [ ] From `vm-app-01`, `nslookup <storageAccount>.blob.core.windows.net` returns the **private endpoint** IP (see deployment output `blobPrivateEndpointIp`).
+- [ ] From `vm-app-01`, `nslookup <storageAccount>.blob.core.windows.net` returns the **private endpoint** IP (match ARM output `blobPrivateEndpointIp`, or Bicep `blobPrivateEndpointNicId` + `az network nic show`).

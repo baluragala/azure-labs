@@ -119,6 +119,3 @@ output privateEndpointId string = pe.id
 
 @description('Resource ID of the Private DNS zone for blob Private Link.')
 output blobPrivateDnsZoneId string = blobPrivateDnsZone.id
-
-@description('Private IP(s) advertised for the blob service on this endpoint (first entry).')
-output blobPrivateEndpointIp string = pe.properties.customDnsConfigs[0].ipAddresses[0]

@@ -858,7 +858,7 @@
       "metadata": {
         "description": "Private IP address used for blob on the private endpoint."
       },
-      "value": "[reference(resourceId('Microsoft.Network/privateEndpoints', parameters('blobPrivateEndpointName')), variables('netApiVersion')).properties.customDnsConfigs[0].ipAddresses[0]]"
+      "value": "[reference(reference(resourceId('Microsoft.Network/privateEndpoints', parameters('blobPrivateEndpointName')), variables('netApiVersion')).properties.networkInterfaces[0].id, variables('netApiVersion')).properties.ipConfigurations[0].properties.privateIPAddress]"
     },
     "blobPrivateDnsZoneId": {
       "type": "string",

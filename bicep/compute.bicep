@@ -51,41 +51,45 @@ var linuxOffer = '0001-com-ubuntu-server-jammy'
 var linuxSku = '22_04-lts-gen2'
 var winPublisher = 'MicrosoftWindowsServer'
 var winOffer = 'WindowsServer'
-var winSku = '2022-Datacenter'
+var winSku = '2025-Datacenter'
 
-resource appPips 'Microsoft.Network/publicIPAddresses@2023-09-01' = [for name in appVmNames: {
-  name: '${name}-pip'
-  location: location
-  sku: {
-    name: 'Standard'
-    tier: 'Regional'
+resource appPips 'Microsoft.Network/publicIPAddresses@2023-09-01' = [
+  for name in appVmNames: {
+    name: '${name}-pip'
+    location: location
+    sku: {
+      name: 'Standard'
+      tier: 'Regional'
+    }
+    properties: {
+      publicIPAllocationMethod: 'Static'
+    }
   }
-  properties: {
-    publicIPAllocationMethod: 'Static'
-  }
-}]
+]
 
-resource appNics 'Microsoft.Network/networkInterfaces@2023-09-01' = [for i in range(0, length(appVmNames)): {
-  name: '${appVmNames[i]}-nic'
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAddress: appPrivateIps[i]
-          privateIPAllocationMethod: 'Static'
-          subnet: {
-            id: appSubnetId
-          }
-          publicIPAddress: {
-            id: appPips[i].id
+resource appNics 'Microsoft.Network/networkInterfaces@2023-09-01' = [
+  for i in range(0, length(appVmNames)): {
+    name: '${appVmNames[i]}-nic'
+    location: location
+    properties: {
+      ipConfigurations: [
+        {
+          name: 'ipconfig1'
+          properties: {
+            privateIPAddress: appPrivateIps[i]
+            privateIPAllocationMethod: 'Static'
+            subnet: {
+              id: appSubnetId
+            }
+            publicIPAddress: {
+              id: appPips[i].id
+            }
           }
         }
-      }
-    ]
+      ]
+    }
   }
-}]
+]
 
 resource dbNic 'Microsoft.Network/networkInterfaces@2023-09-01' = {
   name: '${vmDbName}-nic'
@@ -106,67 +110,69 @@ resource dbNic 'Microsoft.Network/networkInterfaces@2023-09-01' = {
   }
 }
 
-resource appVms 'Microsoft.Compute/virtualMachines@2023-03-01' = [for i in range(0, length(appVmNames)): {
-  name: appVmNames[i]
-  location: location
-  dependsOn: [
-    appNics
-  ]
-  properties: {
-    hardwareProfile: {
-      vmSize: vmAppSize
-    }
-    osProfile: {
-      computerName: appVmNames[i]
-      adminUsername: linuxAdminUsername
-      linuxConfiguration: {
-        disablePasswordAuthentication: true
-        ssh: {
-          publicKeys: [
-            {
-              path: '/home/${linuxAdminUsername}/.ssh/authorized_keys'
-              keyData: sshPublicKey
-            }
-          ]
+resource appVms 'Microsoft.Compute/virtualMachines@2023-03-01' = [
+  for i in range(0, length(appVmNames)): {
+    name: appVmNames[i]
+    location: location
+    dependsOn: [
+      appNics
+    ]
+    properties: {
+      hardwareProfile: {
+        vmSize: vmAppSize
+      }
+      osProfile: {
+        computerName: appVmNames[i]
+        adminUsername: linuxAdminUsername
+        linuxConfiguration: {
+          disablePasswordAuthentication: true
+          ssh: {
+            publicKeys: [
+              {
+                path: '/home/${linuxAdminUsername}/.ssh/authorized_keys'
+                keyData: sshPublicKey
+              }
+            ]
+          }
         }
       }
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: linuxPublisher
-        offer: linuxOffer
-        sku: linuxSku
-        version: 'latest'
-      }
-      osDisk: {
-        name: '${appVmNames[i]}-os'
-        createOption: 'FromImage'
-        managedDisk: {
-          storageAccountType: 'Premium_LRS'
+      storageProfile: {
+        imageReference: {
+          publisher: linuxPublisher
+          offer: linuxOffer
+          sku: linuxSku
+          version: 'latest'
         }
-      }
-      dataDisks: [
-        {
-          lun: 0
-          createOption: 'Attach'
+        osDisk: {
+          name: '${appVmNames[i]}-os'
+          createOption: 'FromImage'
           managedDisk: {
-            id: appDataDiskIds[i]
+            storageAccountType: 'Premium_LRS'
           }
         }
-      ]
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: appNics[i].id
-          properties: {
-            primary: true
+        dataDisks: [
+          {
+            lun: 0
+            createOption: 'Attach'
+            managedDisk: {
+              id: appDataDiskIds[i]
+            }
           }
-        }
-      ]
+        ]
+      }
+      networkProfile: {
+        networkInterfaces: [
+          {
+            id: appNics[i].id
+            properties: {
+              primary: true
+            }
+          }
+        ]
+      }
     }
   }
-}]
+]
 
 resource dbVm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   name: vmDbName
@@ -217,20 +223,22 @@ resource dbVm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   }
 }
 
-resource appNginx 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [for i in range(0, length(appVmNames)): {
-  name: 'CustomScript'
-  parent: appVms[i]
-  location: location
-  properties: {
-    publisher: 'Microsoft.Azure.Extensions'
-    type: 'CustomScript'
-    typeHandlerVersion: '2.1'
-    autoUpgradeMinorVersion: true
-    settings: {
-      commandToExecute: 'sudo apt-get update && sudo apt-get install -y nginx'
+resource appNginx 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [
+  for i in range(0, length(appVmNames)): {
+    name: 'CustomScript'
+    parent: appVms[i]
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.Extensions'
+      type: 'CustomScript'
+      typeHandlerVersion: '2.1'
+      autoUpgradeMinorVersion: true
+      settings: {
+        commandToExecute: 'sudo apt-get update && sudo apt-get install -y nginx'
+      }
     }
   }
-}]
+]
 
 // Static private IPs are defined by parameters; NICs use the same values—no need to read runtime NIC state for outputs.
 @description('Private IP addresses for all VMs in order: app VMs then db VM.')

@@ -182,8 +182,8 @@ output blobStorageAccountName string = blobPrivateLink.outputs.storageAccountNam
 @description('HTTPS blob endpoint (resolves to private IP inside linked VNets).')
 output blobEndpointUri string = blobPrivateLink.outputs.blobEndpointUri
 
-@description('Private IP used for blob traffic on the private endpoint.')
-output blobPrivateEndpointIp string = blobPrivateLink.outputs.blobPrivateEndpointIp
+@description('Resource ID of the NIC created for the blob private endpoint; query its ipConfigurations for the private IP (see lab guide).')
+output blobPrivateEndpointNicId string = reference(resourceId('Microsoft.Network/privateEndpoints', blobPrivateEndpointName), '2023-09-01').properties.networkInterfaces[0].id
 
 @description('Resource ID of the Private DNS zone used for blob Private Link.')
 output blobPrivateDnsZoneId string = blobPrivateLink.outputs.blobPrivateDnsZoneId

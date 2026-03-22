@@ -167,13 +167,19 @@ Run these after a successful deploy.
 
 4. In the **Azure Portal**, open **Network security groups** → **nsg-db** → **Effective security rules** (or subnet association view) and confirm **Internet** is not a permitted source for SQL to the database tier—only the app subnet CIDR should allow **1433** inbound to that tier’s workloads.
 
-5. **Blob over Private Link:** From the deployment outputs, note `blobStorageAccountName` and `blobPrivateEndpointIp`. On `vm-app-01`, run:
+5. **Blob over Private Link:** From the deployment outputs, note `blobStorageAccountName`. On `vm-app-01`, run:
 
    ```bash
    nslookup <blobStorageAccountName>.blob.core.windows.net
    ```
 
-   The address returned should be a **private** IP in your VNet (the private endpoint), **not** a public Azure storage IP. Then verify HTTPS reaches the endpoint (expect **403** without auth—that still proves TLS to Blob over the private path):
+   The address returned should be a **private** IP in your VNet (the private endpoint), **not** a public Azure storage IP. Compare with the ARM output `blobPrivateEndpointIp`, or with the Bicep output `blobPrivateEndpointNicId` via:
+
+   ```bash
+   az network nic show --ids "<blobPrivateEndpointNicId>" --query "ipConfigurations[0].privateIpAddress" -o tsv
+   ```
+
+   Then verify HTTPS reaches the endpoint (expect **403** without auth—that still proves TLS to Blob over the private path):
 
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" "https://<blobStorageAccountName>.blob.core.windows.net/"
@@ -181,9 +187,11 @@ Run these after a successful deploy.
 
    In the portal, open the **storage account** → **Networking**: **Public network access** should be **Disabled**, and **Private endpoint connections** should show **Approved** for the `blob` target.
 
+6. **Subscription policy (e.g. allowed VM SKUs):** If deployment fails with `RequestDisallowedByPolicy` on VM sizes, your `parameters.*.json` **vmAppSize** / **vmDbSize** must match the policy allow-list. The dev parameter files use **Standard_B1ms** (app) and **Standard_B2ms** (Windows DB), which align with common “allow B-series / specific sizes” policies; adjust to your tenant’s list if needed.
+
 ---
 
-## 6. Teardown
+## 7. Teardown
 
 **Why:** Lab VMs and public IPs incur cost; deleting the **resource group** guarantees all nested resources are removed.
 
@@ -197,7 +205,7 @@ The script deletes the group **asynchronously** (`--no-wait`). Confirm in the po
 
 ---
 
-## 7. Challenge extensions (optional)
+## 8. Challenge extensions (optional)
 
 - Replace public IPs on app VMs with **Azure Bastion** in a dedicated subnet for browser-based SSH (no SSH from Internet to public IPs).
 - Add **VNet peering** to a second “management” VNet used only by admins and monitoring.

@@ -15,6 +15,8 @@ This repo implements the infrastructure and documentation described in [`lab.md`
 
 **Secrets:** set `WINDOWS_ADMIN_PASSWORD` before deploy/validate. Replace the placeholder SSH public key in parameter files. Optionally set `AZURE_SUBSCRIPTION_ID` instead of relying on the default CLI subscription.
 
+**Policy:** Some subscriptions deny VM SKUs not on an allow-list (e.g. `Standard_B1s`). The **dev** parameter files use **`Standard_B1ms`** (Linux app) and **`Standard_B2ms`** (Windows DB), which match many IITB-style policies. Change `vmAppSize` / `vmDbSize` in your parameters JSON if your tenant requires different sizes.
+
 Quick validate (Bicep):
 
 ```bash
