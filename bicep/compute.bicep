@@ -234,7 +234,8 @@ resource appNginx 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = [
       typeHandlerVersion: '2.1'
       autoUpgradeMinorVersion: true
       settings: {
-        commandToExecute: 'sudo apt-get update && sudo apt-get install -y nginx'
+        // Azure Ubuntu cloud images often ship without the universe pocket; nginx lives in universe.
+      commandToExecute: 'sudo apt-get update -y && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y universe && sudo apt-get update -y && sudo apt-get install -y nginx'
       }
     }
   }

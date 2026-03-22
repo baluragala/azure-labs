@@ -61,7 +61,7 @@ DB tier (x1):
 - All resource names must use `parameters` — no hardcoded strings except for resource types
 - Use `dependsOn` correctly (NSG before Subnet, VNet before NIC, NIC before VM, VM before data disk attach)
 - VM extensions: add `CustomScriptExtension` on Linux VMs that runs:
-  `sudo apt-get update && sudo apt-get install -y nginx`
+  `sudo apt-get update -y && sudo apt-get install -y software-properties-common && sudo add-apt-repository -y universe && sudo apt-get update -y && sudo apt-get install -y nginx` (universe required on many Azure Ubuntu cloud images for `nginx`)
   (This lets students validate the VM is running after deploy)
 - Use `outputs` section to export: VNet ID, Subnet IDs (including private-endpoint subnet), all VM private IPs, internal DNS zone ID, Blob Private Link fields (storage account name, blob HTTPS URI, `privatelink.blob…` zone ID, and private endpoint IP **or** PE NIC resource ID—see ARM vs Bicep limitations on nested `reference()`)
 - Split parameters file into `dev` (smaller SKUs: e.g. Standard_B1ms app + Standard_B2ms Windows DB, 64 GB disks—must match subscription policy allow-lists) and `prod` (full spec above)
