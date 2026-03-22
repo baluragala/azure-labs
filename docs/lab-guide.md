@@ -53,7 +53,7 @@ Each task explains **what** you are doing and **why** it matters in real deploym
 
 **Why:** Production and dev differ in VM size and disk size; parameter files keep one template and multiple environments.
 
-**What:** Open `bicep/parameters.dev.json` and `bicep/parameters.prod.json` (and the matching files under `arm/`). The repo ships a **valid-format** default `sshPublicKey` so deployment succeeds; **replace it with your own** public key (`cat ~/.ssh/id_ed25519.pub`) or pass `--parameters sshPublicKey="..."` on deploy—otherwise SSH to the Linux VMs will not work (there is no private key in the repo for the default).
+**What:** If you deploy with **`./scripts/deploy-bicep.sh`** or **`./scripts/deploy-arm.sh`**, an ed25519 key pair is created under **`.lab-ssh/`** when missing, and the public key is passed into the deployment automatically—use **`ssh -i .lab-ssh/id_ed25519`** (see the script’s completion message). For manual `az deployment` commands, edit `sshPublicKey` in the parameters JSON or pass `--parameters sshPublicKey="$(cat ~/.ssh/id_ed25519.pub)"`.
 
 ![Expected output](./screenshots/task-1.png)
 
